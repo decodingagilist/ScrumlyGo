@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ScrumlyGo Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: a work tool. Top bar for context (project, sprint, role), left rail for views, one working canvas, a detail drawer on the right. */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --ink: #18212d;
+  --muted: #5b6878;
+  --line: #dde2ea;
+  --accent: #2b55d6;
+  --accent-soft: #e6ecfc;
+  --good: #1f8a52;
+  --warn: #b86e00;
+  --bad: #c2362f;
+  --t-idea: #8a4fd3;
+  --t-epic: #6a3fb5;
+  --t-feature: #2b6fd6;
+  --t-story: #1f8a52;
+  --t-task: #5b6878;
+  --t-bug: #c2362f;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --radius: 8px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f141b; --surface: #171e27; --ink: #e6ebf2; --muted: #9aa7b8; --line: #2a3441;
+    --accent: #7c9bff; --accent-soft: #1f2a47; --good: #4cc387; --warn: #f0a93b; --bad: #ff7a72;
+    --t-idea: #b98cf5; --t-epic: #a487e8; --t-feature: #7cb0ff; --t-story: #4cc387; --t-task: #9aa7b8; --t-bug: #ff7a72;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f141b; --surface: #171e27; --ink: #e6ebf2; --muted: #9aa7b8; --line: #2a3441;
+  --accent: #7c9bff; --accent-soft: #1f2a47; --good: #4cc387; --warn: #f0a93b; --bad: #ff7a72;
+  --t-idea: #b98cf5; --t-epic: #a487e8; --t-feature: #7cb0ff; --t-story: #4cc387; --t-task: #9aa7b8; --t-bug: #ff7a72;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.45 var(--font-body); }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mono { font-family: var(--font-mono); font-size: 12.5px; white-space: nowrap; }
+.muted { color: var(--muted); }
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+h2 { font-size: 18px; font-weight: 600; }
+h3 { font-size: 14px; font-weight: 600; }
+
+.app { display: grid; grid-template-rows: auto auto 1fr; height: 100%; }
+.demo-band { background: var(--accent-soft); color: var(--ink); font-size: 12.5px; padding: 6px 16px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; border-bottom: 1px solid var(--line); }
+.demo-band strong { font-weight: 600; }
+.topbar { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--surface); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; }
+.brand-mark { width: 22px; height: 22px; border-radius: 6px; background: var(--accent); display: grid; place-items: center; color: #fff; font-size: 12px; font-weight: 700; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 12.5px; background: var(--surface); white-space: nowrap; }
+.topbar .spacer { flex: 1; }
+.role-pick { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
+.role-pick select { padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.avatar { width: 26px; height: 26px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 11px; font-weight: 600; color: #fff; flex: none; }
+
+.body { display: grid; grid-template-columns: 196px 1fr; min-height: 0; }
+.rail { background: var(--surface); border-right: 1px solid var(--line); padding: 12px 8px; display: flex; flex-direction: column; gap: 2px; }
+.rail a { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 6px; color: var(--ink); text-decoration: none; font-weight: 500; }
+.rail a:hover { background: var(--bg); }
+.rail a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); }
+.phase { font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); }
+.rail .rail-foot { margin-top: auto; font-size: 12px; color: var(--muted); padding: 10px; }
+
+.main { overflow: auto; padding: 20px; min-width: 0; }
+.view-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.view-head p { margin: 4px 0 0; color: var(--muted); max-width: 70ch; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.btn { border: 1px solid var(--line); background: var(--surface); padding: 6px 12px; border-radius: 6px; font-weight: 500; }
+.btn:hover:not(:disabled) { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.small { padding: 3px 8px; font-size: 12.5px; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.readonly-note { font-size: 12.5px; color: var(--warn); }
+
+/* type badges */
+.tb { display: inline-flex; align-items: center; justify-content: center; min-width: 54px; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; letter-spacing: .02em; border: 1px solid currentColor; }
+.tb.Idea { color: var(--t-idea); } .tb.Epic { color: var(--t-epic); } .tb.Feature { color: var(--t-feature); }
+.tb.Story { color: var(--t-story); } .tb.Task { color: var(--t-task); } .tb.Bug { color: var(--t-bug); }
+.status { display: inline-block; font-size: 11.5px; padding: 1px 8px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); white-space: nowrap; }
+.status.s-done { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, transparent); }
+.status.s-prog { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+.sev { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 4px; color: #fff; }
+.sev.S1 { background: var(--bad); } .sev.S2 { background: var(--warn); } .sev.S3 { background: var(--t-feature); } .sev.S4 { background: var(--muted); }
+
+/* backlog tree */
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.toolbar input[type="search"] { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); min-width: 220px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface); padding: 6px 12px; }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.tree { overflow-x: auto; }
+.tree table { width: 100%; border-collapse: collapse; min-width: 760px; }
+.tree th { text-align: left; font-size: 11.5px; color: var(--muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--line); text-transform: uppercase; letter-spacing: .04em; }
+.tree td { padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.tree tr:hover td { background: color-mix(in srgb, var(--accent-soft) 45%, transparent); }
+.tree .title-cell { display: flex; align-items: center; gap: 8px; }
+.twisty { width: 20px; height: 20px; border: 0; background: none; color: var(--muted); padding: 0; flex: none; }
+.twisty[aria-expanded="true"] svg { transform: rotate(90deg); }
+.twisty svg { transition: transform .12s; }
+.linkish { background: none; border: 0; padding: 0; text-align: left; color: var(--ink); }
+.linkish:hover { color: var(--accent); text-decoration: underline; }
+.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.bar { height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; min-width: 60px; }
+.bar > span { display: block; height: 100%; background: var(--good); }
+.ideas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.idea { padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+
+/* board */
+.board { display: grid; grid-template-columns: repeat(5, minmax(200px, 1fr)); gap: 12px; overflow-x: auto; padding-bottom: 8px; }
+.col { background: color-mix(in srgb, var(--surface) 55%, var(--bg)); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; display: flex; flex-direction: column; gap: 8px; min-height: 200px; }
+.col-head { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.scard { padding: 10px; display: flex; flex-direction: column; gap: 6px; border-left: 3px solid var(--t-story); }
+.scard .row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.scard .moves { display: flex; gap: 4px; }
+.sprint-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.stat { padding: 12px 14px; }
+.stat .k { font-size: 12px; color: var(--muted); }
+.stat .v { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* stand-up */
+.su { display: grid; grid-template-columns: 280px 1fr; gap: 16px; align-items: start; }
+.members { padding: 6px; }
+.member { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 6px; }
+.member.current { background: var(--accent-soft); }
+.member .who { flex: 1; min-width: 0; }
+.member .who div:first-child { font-weight: 500; }
+.att { font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.att.low { color: var(--warn); font-weight: 600; }
+.mark { font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line); }
+.mark.Present { color: var(--good); border-color: var(--good); } .mark.Async { color: var(--accent); border-color: var(--accent); } .mark.Absent { color: var(--bad); border-color: var(--bad); }
+.stage { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.speaker { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.timer { font-family: var(--font-mono); font-size: 34px; font-weight: 500; font-variant-numeric: tabular-nums; margin-left: auto; }
+.timer.over { color: var(--bad); }
+.ytb { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.ytb > div { background: var(--bg); border-radius: 6px; padding: 10px 12px; }
+.ytb h3 { font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 4px; }
+.ytb .blk { border-left: 3px solid var(--bad); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.split2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+.list { margin: 0; padding: 0; list-style: none; }
+.list li { padding: 8px 12px; border-top: 1px solid var(--line); display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.list li:first-child { border-top: 0; }
+.panel-head { padding: 12px 14px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+form.update { padding: 14px; display: grid; gap: 10px; }
+form.update label { font-size: 12.5px; font-weight: 600; display: grid; gap: 4px; }
+form.update textarea, .field input, .field select, .field textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); resize: vertical; }
+.summary { white-space: pre-wrap; font-family: var(--font-mono); font-size: 12.5px; background: var(--bg); padding: 12px; border-radius: 6px; margin: 0; }
+
+/* time */
+.time table { width: 100%; border-collapse: collapse; min-width: 720px; }
+.time th, .time td { padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.time th { font-size: 11.5px; color: var(--muted); font-weight: 600; text-align: right; }
+.time th:first-child, .time td:first-child { text-align: left; }
+.time td.cell { text-align: right; font-variant-numeric: tabular-nums; }
+.time td.cell button { border: 0; background: none; padding: 2px 6px; border-radius: 4px; font-variant-numeric: tabular-nums; }
+.time td.cell button:hover { background: var(--accent-soft); }
+.time td.today { background: color-mix(in srgb, var(--accent-soft) 50%, transparent); }
+.tot { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.tot .bar { width: 90px; position: relative; }
+.tot .bar::after { content: ""; position: absolute; right: 0; top: -2px; bottom: -2px; width: 2px; background: var(--ink); opacity: .35; }
+.tot .bar > span.under { background: var(--warn); }
+
+/* bugs */
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+.tile { padding: 12px 14px; border-top: 4px solid var(--muted); }
+.tile.S1 { border-top-color: var(--bad); } .tile.S2 { border-top-color: var(--warn); } .tile.S3 { border-top-color: var(--t-feature); }
+.tile .v { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.hbars { padding: 12px 14px; display: grid; gap: 10px; }
+.hbar { display: grid; grid-template-columns: 170px 1fr 28px; gap: 10px; align-items: center; font-size: 13px; }
+.hbar .track { height: 14px; background: var(--bg); border-radius: 3px; overflow: hidden; }
+.hbar .track span { display: block; height: 100%; background: var(--t-bug); opacity: .8; }
+
+/* drawer */
+.scrim { position: fixed; inset: 0; background: rgba(10, 14, 20, .35); display: none; z-index: 20; }
+.scrim.open { display: block; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100%); background: var(--surface); border-left: 1px solid var(--line); z-index: 21; transform: translateX(100%); transition: transform .18s ease; display: flex; flex-direction: column; }
+.drawer.open { transform: none; }
+.drawer-head { padding: 14px 16px; border-bottom: 1px solid var(--line); display: flex; gap: 10px; align-items: flex-start; }
+.drawer-head h2 { font-size: 16px; flex: 1; }
+.drawer-body { padding: 16px; overflow: auto; display: grid; gap: 14px; }
+.fields { display: grid; grid-template-columns: 140px 1fr; gap: 8px 12px; font-size: 13px; }
+.fields dt { color: var(--muted); }
+.fields dd { margin: 0; }
+.field { display: grid; gap: 4px; font-size: 12.5px; }
+.ai { border: 1px dashed var(--accent); border-radius: var(--radius); padding: 12px; display: grid; gap: 8px; background: color-mix(in srgb, var(--accent-soft) 40%, transparent); }
+.ai ul { margin: 0; padding-left: 18px; }
+.inline-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+.inline-form .field { min-width: 110px; }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 6px; font-size: 13px; z-index: 40; display: none; }
+.toast.show { display: block; }
+
+@media (max-width: 860px) {
+  .su { grid-template-columns: 1fr; }
+  .split2 { grid-template-columns: 1fr; }
+  .tiles { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 720px) {
+  .body { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+  .rail { order: 2; flex-direction: row; border-right: 0; border-top: 1px solid var(--line); padding: 4px; overflow-x: auto; }
+  .rail a { flex: 1; flex-direction: column; gap: 2px; font-size: 12px; padding: 6px 4px; justify-content: center; text-align: center; }
+  .rail .phase, .rail .rail-foot { display: none; }
+  .main { padding: 14px; }
+  .topbar { padding: 8px 12px; gap: 8px; }
+  .topbar .hide-sm { display: none; }
+  .ytb { grid-template-columns: 1fr; }
+  .timer { font-size: 26px; }
+  .hbar { grid-template-columns: 110px 1fr 24px; }
+  .fields { grid-template-columns: 110px 1fr; }
+  .toolbar input[type="search"] { min-width: 0; flex: 1; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="demo-band" role="note"><strong>Clickable demo</strong><span>Sample data only. Nothing is saved; reload to reset.</span><span class="muted">Switch role in the top bar to see what each person can do.</span></div>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">S</span>ScrumlyGo</div>
+    <span class="chip hide-sm">FreeAppStore Intern Programme</span>
+    <span class="chip" id="sprint-chip">Sprint W46 · 9–15 Nov 2026</span>
+    <span class="spacer"></span>
+    <label class="role-pick" for="role">View as
+      <select id="role">
+        <option value="admin">Admin · Serge I.</option>
+        <option value="po">Product Owner · Maya Chen</option>
+        <option value="sm" selected>Scrum Master · Arnab C.</option>
+        <option value="contrib">Contributor · Tom Okafor</option>
+        <option value="observer">Observer · Ana Ruiz (candidate)</option>
+      </select>
+    </label>
+    <span class="chip hide-sm" id="gh-chip" title="Signed in with GitHub"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span id="gh-user">arnab-c</span></span>
+  </header>
+  <div class="body">
+    <nav class="rail" aria-label="Views">
+      <a href="#backlog" data-view="backlog">Backlog <span class="phase">MVP</span></a>
+      <a href="#board" data-view="board">Sprint board <span class="phase">MVP</span></a>
+      <a href="#standup" data-view="standup">Stand-up <span class="phase">MVP</span></a>
+      <a href="#time" data-view="time">Hours <span class="phase">MVP</span></a>
+      <a href="#bugs" data-view="bugs">Bugs <span class="phase">Phase 2</span></a>
+      <div class="rail-foot">Stand-up weekdays 9:00 AM Melbourne · <a href="https://meet.google.com/" style="display:inline;padding:0;color:var(--accent)">Meet link</a></div>
+    </nav>
+    <main class="main" id="main" tabindex="-1"></main>
+  </div>
+</div>
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-label="Item details" aria-hidden="true"></aside>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function () {
+  "use strict";
+  // ---------- sample data ----------
+  var TODAY = "2026-11-12";
+  var DAYS = ["2026-11-09", "2026-11-10", "2026-11-11", "2026-11-12", "2026-11-13", "2026-11-14", "2026-11-15"];
+  var DAY_LABEL = ["Mon 9", "Tue 10", "Wed 11", "Thu 12", "Fri 13", "Sat 14", "Sun 15"];
+
+  var people = {
+    serge: { name: "Serge I.", role: "Admin", color: "#5b6878", gh: "serge-ivo" },
+    maya: { name: "Maya Chen", role: "Product Owner", color: "#8a4fd3", gh: "maya-chen" },
+    arnab: { name: "Arnab C.", role: "Scrum Master", color: "#2b55d6", gh: "arnab-c" },
+    tom: { name: "Tom Okafor", role: "Developer", color: "#1f8a52", gh: "tom-okafor" },
+    lena: { name: "Lena Brandt", role: "Developer", color: "#b86e00", gh: "lena-b" },
+    kofi: { name: "Kofi Mensah", role: "Developer", color: "#c2362f", gh: "kofi-m" },
+    jules: { name: "Jules Martin", role: "Designer", color: "#0f7c8c", gh: "jules-m" },
+    ana: { name: "Ana Ruiz", role: "Observer (candidate)", color: "#7a7f8a", gh: "ana-ruiz" }
+  };
+  var team = ["maya", "arnab", "tom", "lena", "kofi", "jules"];
+
+  var ROLES = {
+    admin: { user: "serge", label: "Admin" },
+    po: { user: "maya", label: "Product Owner" },
+    sm: { user: "arnab", label: "Scrum Master" },
+    contrib: { user: "tom", label: "Contributor" },
+    observer: { user: "ana", label: "Observer" }
+  };
+  var PERMS = {
+    admin: ["portfolio", "stories", "order", "sprint", "runStandup", "postUpdate", "logHours", "allHours", "raiseBug", "triage", "ai", "settings"],
+    po: ["portfolio", "stories", "order", "sprint", "runStandup", "postUpdate", "logHours", "allHours", "raiseBug", "triage", "ai"],
+    sm: ["stories", "sprint", "runStandup", "postUpdate", "logHours", "allHours", "raiseBug", "triage", "ai"],
+    contrib: ["stories", "postUpdate", "logHours", "raiseBug", "ai", "proposeIdea"],
+    observer: []
+  };
+
+  var items = [
+    { id: "I-1", type: "Idea", title: "Self-serve onboarding for new interns", status: "Accepted", owner: "maya", votes: 9, problem: "New interns wait for a call before they can start.", promoted: "E-1", priority: "P1" },
+    { id: "I-2", type: "Idea", title: "Showcase page for finished intern work", status: "Under review", owner: "jules", votes: 6, problem: "Approved work is hard to point recruiters to.", priority: "P2" },
+    { id: "I-3", type: "Idea", title: "Dark mode for store listings", status: "New", owner: "kofi", votes: 3, problem: "Listings are hard to read at night.", priority: "P3" },
+
+    { id: "E-1", type: "Epic", title: "Self-serve intern onboarding", status: "In progress", owner: "maya", priority: "P1", outcome: "New interns contribute in week 1 without a call", measure: "First approved week within 7 days of joining" },
+    { id: "E-2", type: "Epic", title: "ScrumlyGo MVP", status: "In progress", owner: "arnab", priority: "P1", outcome: "Stand-up runs off one shared board", measure: "All 6 interns post async updates 4 of 5 days" },
+    { id: "E-3", type: "Epic", title: "Programme operations", status: "In progress", owner: "arnab", priority: "P3", outcome: "Overhead time is visible, not hidden", measure: "Overhead under 15% of logged hours" },
+
+    { id: "F-1", type: "Feature", parent: "E-1", title: "Onboarding checklist", status: "In progress", owner: "maya", priority: "P1", hypothesis: "A checklist halves onboarding questions in Discord", ac: "Every new intern sees 8 steps with progress; SM sees progress per intern" },
+    { id: "F-2", type: "Feature", parent: "E-1", title: "App listing quality checks", status: "Ready", owner: "maya", priority: "P2", hypothesis: "Automatic checks cut listing rework", ac: "Listings missing screenshots or descriptions are flagged before review" },
+    { id: "F-3", type: "Feature", parent: "E-2", title: "Product backlog", status: "In progress", owner: "maya", priority: "P1", hypothesis: "One tree replaces three spreadsheets", ac: "Five levels plus bugs, drag to reorder, hours roll up" },
+    { id: "F-4", type: "Feature", parent: "E-2", title: "Daily stand-up runner", status: "In progress", owner: "arnab", priority: "P1", hypothesis: "Stand-up finishes in 15 minutes when run from the board", ac: "Timer, rotating order, attendance, impediments, saved summary" },
+    { id: "F-5", type: "Feature", parent: "E-3", title: "Programme overhead", status: "In progress", owner: "arnab", priority: "P3", hypothesis: "Logging overhead keeps hours honest", ac: "Each sprint has an overhead Story with a task per person" },
+
+    { id: "S-101", type: "Story", parent: "F-1", title: "As a new intern I want a step-by-step checklist so that I know what to do on day one", status: "Completed", owner: "jules", points: 3, priority: "P1", sprint: "W46" },
+    { id: "S-102", type: "Story", parent: "F-1", title: "As a Scrum Master I want each intern's checklist progress so that I can follow up early", status: "In progress", owner: "tom", points: 5, priority: "P1", sprint: "W46" },
+    { id: "S-103", type: "Story", parent: "F-2", title: "As a reviewer I want listings flagged when screenshots are missing", status: "Ready", owner: "lena", points: 3, priority: "P2", sprint: "W46" },
+    { id: "S-104", type: "Story", parent: "F-3", title: "As a PO I want to expand Epics into Features, Stories and Tasks in one tree", status: "In progress", owner: "kofi", points: 5, priority: "P1", sprint: "W46" },
+    { id: "S-105", type: "Story", parent: "F-3", title: "As a contributor I want to log hours on my task in two taps", status: "Defined", owner: "tom", points: 3, priority: "P2", sprint: "W46" },
+    { id: "S-106", type: "Story", parent: "F-4", title: "As a Scrum Master I want a timer per person so that stand-up ends in 15 minutes", status: "In progress", owner: "lena", points: 3, priority: "P1", sprint: "W46" },
+    { id: "S-107", type: "Story", parent: "F-4", title: "As a member I want to post my update before 9 AM from my phone", status: "Accepted", owner: "kofi", points: 2, priority: "P1", sprint: "W46" },
+    { id: "S-108", type: "Story", parent: "F-5", title: "Programme overhead, sprint W46", status: "In progress", owner: "arnab", points: 0, priority: "P3", sprint: "W46" },
+
+    { id: "T-201", type: "Task", parent: "S-101", title: "Draft the eight checklist steps", status: "Done", owner: "jules", est: 3 },
+    { id: "T-202", type: "Task", parent: "S-101", title: "Checklist page layout", status: "Done", owner: "jules", est: 4 },
+    { id: "T-203", type: "Task", parent: "S-102", title: "Progress API per intern", status: "In progress", owner: "tom", est: 5 },
+    { id: "T-204", type: "Task", parent: "S-102", title: "SM progress table", status: "To do", owner: "tom", est: 3 },
+    { id: "T-213", type: "Task", parent: "S-103", title: "Write acceptance criteria for listing checks", status: "Done", owner: "maya", est: 2 },
+    { id: "T-205", type: "Task", parent: "S-103", title: "Missing-screenshot rule", status: "To do", owner: "lena", est: 3 },
+    { id: "T-206", type: "Task", parent: "S-104", title: "Tree with expand and collapse", status: "In progress", owner: "kofi", est: 5 },
+    { id: "T-207", type: "Task", parent: "S-104", title: "Drag to reorder", status: "To do", owner: "kofi", est: 3 },
+    { id: "T-208", type: "Task", parent: "S-105", title: "Hours entry sheet on the task card", status: "To do", owner: "tom", est: 2 },
+    { id: "T-209", type: "Task", parent: "S-106", title: "Countdown timer", status: "Done", owner: "lena", est: 2 },
+    { id: "T-210", type: "Task", parent: "S-106", title: "Rotate speaker order", status: "In progress", owner: "lena", est: 2 },
+    { id: "T-212", type: "Task", parent: "S-106", title: "Stand-up screen mock-ups", status: "Done", owner: "jules", est: 3 },
+    { id: "T-214", type: "Task", parent: "S-106", title: "Stand-up facilitation guide", status: "In progress", owner: "arnab", est: 2 },
+    { id: "T-211", type: "Task", parent: "S-107", title: "Async update form", status: "Done", owner: "kofi", est: 3 }
+  ];
+  team.forEach(function (p, i) {
+    items.push({ id: "T-3" + (10 + i), type: "Task", parent: "S-108", title: "Stand-ups and learning · " + people[p].name.split(" ")[0], status: "In progress", owner: p, est: 2 });
+  });
+
+  var bugs = [
+    { id: "B-3", type: "Bug", parent: "F-4", title: "Timer skips the last person in the order", severity: "S1", status: "In progress", owner: "lena", foundIn: "S-106", opened: "2026-11-11", steps: "Start stand-up with 6 people; press Next 5 times", expected: "Sixth person is called", actual: "Stand-up ends after the fifth" },
+    { id: "B-1", type: "Bug", parent: "F-1", title: "Checklist progress resets after refresh", severity: "S2", status: "Triaged", owner: "tom", foundIn: "S-102", opened: "2026-11-10", steps: "Tick two steps, reload the page", expected: "Two steps stay ticked", actual: "All steps are unticked" },
+    { id: "B-6", type: "Bug", parent: "F-3", title: "Collapsed Epic forgets its state on reload", severity: "S2", status: "Fixed", owner: "kofi", foundIn: "S-104", opened: "2026-11-06", steps: "Collapse E-1, reload", expected: "E-1 stays collapsed", actual: "E-1 opens again" },
+    { id: "B-2", type: "Bug", parent: "F-2", title: "Listing badge overlaps the title on phones", severity: "S3", status: "New", owner: "lena", opened: "2026-11-04", steps: "Open any listing at 380 px wide", expected: "Badge sits under the title", actual: "Badge covers the last word" },
+    { id: "B-4", type: "Bug", parent: "F-3", title: "Dragged item drops to the top of the list", severity: "S3", status: "Triaged", owner: "kofi", opened: "2026-10-29", steps: "Drag S-105 below S-104", expected: "S-105 lands below S-104", actual: "S-105 jumps to the top" },
+    { id: "B-5", type: "Bug", parent: "F-1", title: "Typo in the welcome step", severity: "S4", status: "Closed", owner: "jules", opened: "2026-11-02", closed: "2026-11-03", steps: "Open step 1", expected: "Welcome", actual: "Welcom" }
+  ];
+
+  var entries = [];
+  function e(p, t, d, h) { entries.push({ person: p, task: t, date: DAYS[d], hours: h }); }
+  e("tom", "T-203", 0, 1.5); e("tom", "T-203", 1, 2); e("tom", "T-312", 2, 0.5); e("tom", "T-203", 3, 1);
+  e("lena", "T-209", 0, 2); e("lena", "T-209", 1, 1); e("lena", "T-210", 1, 1); e("lena", "T-313", 2, 0.5); e("lena", "T-210", 3, 1.5);
+  e("kofi", "T-211", 0, 2); e("kofi", "T-211", 1, 1); e("kofi", "T-206", 2, 2.5); e("kofi", "T-206", 3, 1.5); e("kofi", "T-314", 3, 0.5);
+  e("jules", "T-201", 0, 2); e("jules", "T-202", 0, 1); e("jules", "T-202", 1, 3); e("jules", "T-212", 3, 2);
+  e("maya", "T-213", 0, 1); e("maya", "T-213", 2, 1); e("maya", "T-310", 3, 0.5);
+  e("arnab", "T-311", 0, 0.5); e("arnab", "T-214", 1, 1); e("arnab", "T-311", 2, 0.5); e("arnab", "T-214", 3, 1); e("arnab", "T-311", 3, 0.5);
+
+  var updates = {
+    maya: { y: "Wrote acceptance criteria for listing checks (F-2).", t: "Refine S-105 with Tom; order the F-3 backlog.", b: "" },
+    arnab: { y: "Drafted the stand-up facilitation guide.", t: "Run stand-up; chase Neon project access.", b: "" },
+    tom: { y: "Progress API returns per-intern counts.", t: "Finish API tests, start the SM progress table.", b: "Need a decision on how to store checklist ticks (B-1)." },
+    lena: { y: "Countdown timer done; started rotating order.", t: "Fix B-3, the timer skipping the last person.", b: "" },
+    jules: { y: "Stand-up mock-ups handed over.", t: "Can't attend live today; reviewing the checklist page.", b: "", async: true }
+  };
+  var attendance = { maya: 3, arnab: 3, tom: 2, lena: 1, kofi: 2, jules: 0 };
+  var impediments = [
+    { id: "IMP-1", title: "Waiting on Neon project access for ScrumlyGo", item: "S-104", owner: "serge", raised: "2026-11-10", status: "Open" },
+    { id: "IMP-2", title: "Design review slot not booked", item: "S-101", owner: "maya", raised: "2026-11-09", status: "Resolved" }
+  ];
+  var parking = ["Ana's one-to-one after stand-up (working interview)"];
+
+  // ---------- state ----------
+  var state = {
+    role: "sm",
+    view: "backlog",
+    backlogMode: "tree",
+    expanded: { "E-1": true, "E-2": true, "F-1": true, "F-4": true },
+    search: "",
+    drawer: null,
+    ai: null,
+    su: { running: false, order: [], idx: 0, marks: {}, seconds: 90, timer: null, done: false, moved: [] },
+    timeCell: null,
+    nextBug: 7,
+    nextImp: 3
+  };
+
+  // ---------- helpers ----------
+  function $(s, r) { return (r || document).querySelector(s); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function can(p) { return PERMS[state.role].indexOf(p) !== -1; }
+  function me() { return ROLES[state.role].user; }
+  function byId(id) { for (var i = 0; i < items.length; i++) if (items[i].id === id) return items[i]; for (var j = 0; j < bugs.length; j++) if (bugs[j].id === id) return bugs[j]; return null; }
+  function kids(id) { return items.filter(function (x) { return x.parent === id; }); }
+  function bugsOf(id) { return bugs.filter(function (b) { return b.parent === id; }); }
+  function fmt(h) { return (Math.round(h * 100) / 100).toString(); }
+  function logged(it) {
+    if (it.type === "Task") return entries.filter(function (x) { return x.task === it.id; }).reduce(function (a, x) { return a + x.hours; }, 0);
+    return kids(it.id).reduce(function (a, k) { return a + logged(k); }, 0);
+  }
+  function estimate(it) {
+    if (it.type === "Task") return it.est || 0;
+    return kids(it.id).reduce(function (a, k) { return a + estimate(k); }, 0);
+  }
+  function points(it) {
+    if (it.type === "Story") return it.points || 0;
+    return kids(it.id).reduce(function (a, k) { return a + points(k); }, 0);
+  }
+  function donePoints(it) {
+    if (it.type === "Story") return (it.status === "Completed" || it.status === "Accepted") ? (it.points || 0) : 0;
+    return kids(it.id).reduce(function (a, k) { return a + donePoints(k); }, 0);
+  }
+  function openBug(b) { return ["Closed", "Verified", "Duplicate", "Won't fix"].indexOf(b.status) === -1; }
+  function daysOpen(b) { return Math.round((Date.parse(TODAY) - Date.parse(b.opened)) / 864e5); }
+  function avatar(p, size) { var x = people[p]; var ini = x.name.split(" ").map(function (s) { return s[0]; }).join("").slice(0, 2); return '<span class="avatar" style="background:' + x.color + (size ? ";width:" + size + "px;height:" + size + "px" : "") + '" title="' + esc(x.name) + '">' + esc(ini) + "</span>"; }
+  function statusClass(s) { return /Done|Completed|Accepted|Closed|Verified|Fixed/.test(s) ? "s-done" : /progress|Triaged/i.test(s) ? "s-prog" : ""; }
+  function statusPill(s) { return '<span class="status ' + statusClass(s) + '">' + esc(s) + "</span>"; }
+  function toast(msg) { var t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast._t); toast._t = setTimeout(function () { t.classList.remove("show"); }, 2200); }
+  function dis(p) { return can(p) ? "" : ' disabled title="Your role cannot do this"'; }
+  var CHEV = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
+
+  var STORY_FLOW = ["Defined", "Ready", "In progress", "Completed", "Accepted"];
+  var TASK_FLOW = ["To do", "In progress", "Done"];
+  var BUG_FLOW = ["New", "Triaged", "In progress", "Fixed", "Verified", "Closed", "Duplicate", "Won't fix"];
+
+  // ---------- views ----------
+  function viewHead(title, sub, right) {
+    return '<div class="view-head"><div><h2>' + title + "</h2>" + (sub ? "<p>" + sub + "</p>" : "") + "</div>" + (right || "") + "</div>";
+  }
+  function readOnlyNote() { return state.role === "observer" ? '<span class="readonly-note">Observer: read-only view</span>' : ""; }
+
+  function renderBacklog() {
+    var right = '<div class="toolbar" style="margin:0">' + readOnlyNote() +
+      '<div class="seg" role="group" aria-label="Backlog view"><button data-act="mode" data-mode="tree" aria-pressed="' + (state.backlogMode === "tree") + '">Tree</button><button data-act="mode" data-mode="ideas" aria-pressed="' + (state.backlogMode === "ideas") + '">Ideas</button></div>' +
+      '<button class="btn primary" data-act="new-item"' + dis(state.backlogMode === "ideas" ? (can("portfolio") || can("proposeIdea") ? "stories" : "portfolio") : "portfolio") + ">" + (state.backlogMode === "ideas" ? "New idea" : "New Epic") + "</button></div>";
+    var html = viewHead("Product backlog", "Idea, Epic, Feature, Story and Task, with bugs under their Feature. Hours and points roll up from the level below.", right);
+    if (state.backlogMode === "ideas") {
+      html += '<div class="ideas-grid">' + items.filter(function (x) { return x.type === "Idea"; }).map(function (it) {
+        return '<article class="card idea"><div class="row" style="display:flex;justify-content:space-between;gap:8px"><span class="tb Idea">IDEA</span>' + statusPill(it.status) + '</div><button class="linkish" data-act="open" data-id="' + it.id + '"><strong>' + esc(it.title) + '</strong></button><div class="muted">' + esc(it.problem) + '</div><div style="display:flex;justify-content:space-between;align-items:center"><span class="mono muted">' + it.id + " · " + it.votes + " votes</span>" +
+          (it.promoted ? '<span class="chip">Promoted to ' + it.promoted + "</span>" : '<button class="btn small" data-act="promote" data-id="' + it.id + '"' + dis("portfolio") + ">Promote to Epic</button>") + "</div></article>";
+      }).join("") + "</div>";
+      return html;
+    }
+    html += '<div class="toolbar"><input type="search" id="search" placeholder="Filter by title or ID" value="' + esc(state.search) + '" aria-label="Filter backlog"><button class="btn small" data-act="expand-all">Expand all</button><button class="btn small" data-act="collapse-all">Collapse all</button></div>';
+    html += '<div class="card tree"><table><thead><tr><th style="width:46%">Item</th><th>Status</th><th>Owner</th><th class="num">Points</th><th class="num">Hours logged / est.</th><th>Done</th></tr></thead><tbody>';
+    var q = state.search.trim().toLowerCase();
+    function matches(it) {
+      if (!q) return true;
+      if ((it.title + " " + it.id).toLowerCase().indexOf(q) !== -1) return true;
+      return kids(it.id).some(matches) || bugsOf(it.id).some(function (b) { return (b.title + " " + b.id).toLowerCase().indexOf(q) !== -1; });
+    }
+    function row(it, depth) {
+      if (!matches(it)) return "";
+      var ch = kids(it.id), bg = it.type === "Feature" ? bugsOf(it.id) : [];
+      var has = ch.length || bg.length;
+      var open = q ? true : !!state.expanded[it.id];
+      var pts = it.type === "Task" ? "" : points(it);
+      var pct = it.type === "Epic" || it.type === "Feature" ? (points(it) ? Math.round(donePoints(it) / points(it) * 100) : 0) : null;
+      var openBugs = bg.filter(openBug).length;
+      var r = '<tr><td><div class="title-cell" style="padding-left:' + (depth * 20) + 'px">' +
+        (has ? '<button class="twisty" data-act="toggle" data-id="' + it.id + '" aria-expanded="' + open + '" aria-label="Expand ' + it.id + '">' + CHEV + "</button>" : '<span style="width:20px;flex:none"></span>') +
+        '<span class="tb ' + it.type + '">' + it.type.toUpperCase() + '</span><span class="mono muted">' + it.id + '</span><button class="linkish" data-act="open" data-id="' + it.id + '">' + esc(it.title) + "</button>" +
+        (openBugs ? ' <span class="chip" style="color:var(--t-bug);border-color:var(--t-bug)">' + openBugs + " open bug" + (openBugs > 1 ? "s" : "") + "</span>" : "") +
+        "</div></td><td>" + statusPill(it.status) + "</td><td>" + avatar(it.owner, 22) + '</td><td class="num">' + pts + '</td><td class="num">' + fmt(logged(it)) + " / " + fmt(estimate(it)) + "</td><td>" +
+        (pct !== null ? '<div class="bar" title="' + pct + '% of points done"><span style="width:' + pct + '%"></span></div>' : "") + "</td></tr>";
+      if (open) {
+        ch.forEach(function (c) { r += row(c, depth + 1); });
+        bg.forEach(function (b) {
+          r += '<tr><td><div class="title-cell" style="padding-left:' + ((depth + 1) * 20) + 'px"><span style="width:20px;flex:none"></span><span class="tb Bug">BUG</span><span class="mono muted">' + b.id + '</span><span class="sev ' + b.severity + '">' + b.severity + '</span><button class="linkish" data-act="open" data-id="' + b.id + '">' + esc(b.title) + "</button></div></td><td>" + statusPill(b.status) + "</td><td>" + avatar(b.owner, 22) + '</td><td></td><td></td><td></td></tr>';
+        });
+      }
+      return r;
+    }
+    items.filter(function (x) { return x.type === "Epic"; }).forEach(function (ep) { html += row(ep, 0); });
+    html += "</tbody></table></div>";
+    return html;
+  }
+
+  function renderBoard() {
+    var stories = items.filter(function (x) { return x.type === "Story" && x.sprint === "W46"; });
+    var committed = stories.reduce(function (a, s) { return a + (s.points || 0); }, 0);
+    var done = stories.reduce(function (a, s) { return a + ((s.status === "Completed" || s.status === "Accepted") ? s.points : 0); }, 0);
+    var est = stories.reduce(function (a, s) { return a + estimate(s); }, 0);
+    var log = stories.reduce(function (a, s) { return a + logged(s); }, 0);
+    var html = viewHead("Sprint board · W46", "One-week sprint, Monday 9 to Sunday 15 November. Move a Story with the arrows; open it to see its Tasks and log hours.", readOnlyNote());
+    html += '<div class="sprint-stats">' +
+      '<div class="card stat"><div class="k">Points committed</div><div class="v">' + committed + "</div></div>" +
+      '<div class="card stat"><div class="k">Points done</div><div class="v">' + done + "</div></div>" +
+      '<div class="card stat"><div class="k">Hours logged / est.</div><div class="v">' + fmt(log) + " / " + fmt(est) + "</div></div>" +
+      '<div class="card stat"><div class="k">Open impediments</div><div class="v">' + impediments.filter(function (i) { return i.status === "Open"; }).length + "</div></div></div>";
+    html += '<div class="board">' + STORY_FLOW.map(function (col, ci) {
+      var cs = stories.filter(function (s) { return s.status === col; });
+      return '<section class="col" aria-label="' + col + '"><div class="col-head"><span>' + col + "</span><span>" + cs.length + "</span></div>" + cs.map(function (s) {
+        var tasks = kids(s.id), td = tasks.filter(function (t) { return t.status === "Done"; }).length;
+        var lg = logged(s), es = estimate(s);
+        return '<article class="card scard"><div class="row"><span class="mono muted">' + s.id + "</span>" + avatar(s.owner, 22) + '</div><button class="linkish" data-act="open" data-id="' + s.id + '">' + esc(s.title) + '</button><div class="row muted" style="font-size:12px"><span>' + s.points + " pts · " + td + "/" + tasks.length + " tasks</span><span>" + fmt(lg) + "/" + fmt(es) + ' h</span></div><div class="bar"><span style="width:' + (es ? Math.min(100, lg / es * 100) : 0) + '%;background:var(--accent)"></span></div>' +
+          '<div class="row"><span></span><div class="moves"><button class="btn small" data-act="move" data-id="' + s.id + '" data-dir="-1" aria-label="Move ' + s.id + ' left"' + (ci === 0 ? " disabled" : dis(col === "Completed" ? "order" : "stories")) + ">&larr;</button><button class=\"btn small\" data-act=\"move\" data-id=\"" + s.id + "\" data-dir=\"1\" aria-label=\"Move " + s.id + " right\"" + (ci === STORY_FLOW.length - 1 ? " disabled" : dis(col === "Completed" ? "order" : "stories")) + ">&rarr;</button></div></div></article>";
+      }).join("") + "</section>";
+    }).join("") + "</div>";
+    html += '<p class="muted" style="font-size:12.5px">Only the Product Owner or Admin can move a Story from Completed to Accepted.</p>';
+    return html;
+  }
+
+  function renderStandup() {
+    var su = state.su;
+    var right = '<div class="actions">' + readOnlyNote() +
+      '<a class="btn" href="https://meet.google.com/" style="text-decoration:none">Join Google Meet</a>' +
+      (su.running ? '<button class="btn" data-act="su-end"' + dis("runStandup") + ">End stand-up</button>" : '<button class="btn primary" data-act="su-start"' + dis("runStandup") + ">Start stand-up</button>") + "</div>";
+    var html = viewHead("Daily stand-up · Thursday 12 November", "Weekdays 9:00 AM Melbourne time. Post your update before the meeting; the Scrum Master runs it from here.", right);
+    html += '<div class="su"><div class="card members"><div class="panel-head" style="padding:8px"><h3>Team</h3><span class="muted" style="font-size:12px">Live this week · min 2</span></div>' + team.map(function (p) {
+      var u = updates[p];
+      var cur = su.running && su.order[su.idx] === p;
+      var mk = su.marks[p];
+      var low = attendance[p] < 1;
+      return '<div class="member' + (cur ? " current" : "") + '">' + avatar(p) + '<div class="who"><div>' + esc(people[p].name) + '</div><div class="muted" style="font-size:12px">' + (u ? (u.async ? "Posted, attending async" : "Update posted") : "No update yet") + "</div></div>" +
+        (mk ? '<span class="mark ' + mk + '">' + mk + "</span>" : "") + '<span class="att' + (low ? " low" : "") + '" title="Live stand-ups attended this week">' + attendance[p] + "/2</span></div>";
+    }).join("") + "</div>";
+    html += '<div class="card stage">';
+    if (su.done) {
+      html += '<div class="panel-head" style="padding:0 0 10px"><h3>Stand-up summary saved</h3><button class="btn small" data-act="copy-summary">Copy for Discord</button></div><pre class="summary" id="summary">' + esc(summaryText()) + "</pre>" +
+        '<p class="muted" style="margin:0;font-size:12.5px">Phase 2 posts this to the team\'s Discord channel automatically.</p>';
+    } else if (!su.running) {
+      var posted = team.filter(function (p) { return updates[p]; }).length;
+      html += "<h3>Ready to start</h3><p style=\"margin:0\">" + posted + " of " + team.length + ' updates posted. Members are called in a rotating order with a 90-second timer each.</p><p class="muted" style="margin:0">Jules has 0 live stand-ups this week, shown in amber. Kofi has not posted yet.</p>';
+    } else {
+      var p = su.order[su.idx], u = updates[p] || { y: "", t: "", b: "" };
+      var mine = items.filter(function (x) { return x.type === "Task" && x.owner === p && x.status === "In progress" && x.parent !== "S-108"; });
+      html += '<div class="speaker">' + avatar(p, 40) + '<div><div style="font-weight:600;font-size:16px">' + esc(people[p].name) + '</div><div class="muted">' + (su.idx + 1) + " of " + su.order.length + " · " + esc(people[p].role) + '</div></div><div class="timer' + (su.seconds < 0 ? " over" : "") + '" aria-live="off">' + (su.seconds < 0 ? "+" : "") + Math.floor(Math.abs(su.seconds) / 60) + ":" + String(Math.abs(su.seconds) % 60).padStart(2, "0") + "</div></div>";
+      html += '<div class="ytb"><div><h3>Yesterday</h3>' + (esc(u.y) || '<span class="muted">No update posted</span>') + "</div><div><h3>Today</h3>" + (esc(u.t) || '<span class="muted">-</span>') + '</div><div class="' + (u.b ? "blk" : "") + '"><h3>Blockers</h3>' + (esc(u.b) || '<span class="muted">None</span>') + "</div></div>";
+      html += "<div><h3 style=\"margin-bottom:6px\">In progress</h3>" + (mine.length ? '<ul class="list card">' + mine.map(function (t) { return '<li><button class="linkish" data-act="open" data-id="' + t.id + '"><span class="mono muted">' + t.id + "</span> " + esc(t.title) + '</button><span class="mono">' + fmt(logged(t)) + "/" + fmt(t.est) + " h</span></li>"; }).join("") + "</ul>" : '<span class="muted">No tasks in progress</span>') + "</div>";
+      html += '<div class="actions"><button class="btn" data-act="mark" data-mark="Present"' + dis("runStandup") + '>Present</button><button class="btn" data-act="mark" data-mark="Async"' + dis("runStandup") + '>Async</button><button class="btn" data-act="mark" data-mark="Absent"' + dis("runStandup") + '>Absent</button><span style="flex:1"></span><button class="btn" data-act="raise-blocker"' + dis("runStandup") + '>Raise blocker</button><button class="btn" data-act="park"' + dis("runStandup") + '>Park a topic</button><button class="btn primary" data-act="su-next"' + dis("runStandup") + ">" + (su.idx === su.order.length - 1 ? "Finish" : "Next person") + "</button></div>";
+    }
+    html += "</div></div>";
+    // my update + impediments
+    var mu = updates[me()] || { y: "", t: "", b: "" };
+    var canPost = can("postUpdate") && team.indexOf(me()) !== -1;
+    html += '<div class="split2"><section class="card"><div class="panel-head"><h3>My update · ' + esc(people[me()].name) + "</h3>" + (updates[me()] ? '<span class="status s-done">Posted</span>' : "") + "</div>" +
+      (canPost ? '<form class="update" id="update-form"><label for="u-y">Yesterday<textarea id="u-y" rows="2">' + esc(mu.y) + '</textarea></label><label for="u-t">Today<textarea id="u-t" rows="2">' + esc(mu.t) + '</textarea></label><label for="u-b">Blockers<textarea id="u-b" rows="2" placeholder="Leave empty if none">' + esc(mu.b) + '</textarea></label><div class="actions"><button class="btn primary" type="submit">Post update</button><span class="muted" style="font-size:12px;align-self:center">Pre-filled from your last 24 hours of task activity.</span></div></form>'
+        : '<p class="muted" style="padding:14px;margin:0">' + (state.role === "observer" ? "Observers watch stand-up but do not post updates." : "Admins are not in the stand-up rotation.") + "</p>") + "</section>";
+    html += '<section class="card"><div class="panel-head"><h3>Impediments</h3><span class="muted" style="font-size:12px">' + impediments.filter(function (i) { return i.status === "Open"; }).length + " open</span></div><ul class=\"list\">" + impediments.map(function (im) {
+      var age = Math.round((Date.parse(TODAY) - Date.parse(im.raised)) / 864e5);
+      return '<li><div><div><span class="mono muted">' + im.id + "</span> " + esc(im.title) + '</div><div class="muted" style="font-size:12px">On ' + im.item + " · owner " + esc(people[im.owner].name) + " · " + age + " days</div></div>" + (im.status === "Open" ? '<button class="btn small" data-act="resolve" data-id="' + im.id + '"' + dis("runStandup") + ">Resolve</button>" : '<span class="status s-done">Resolved</span>') + "</li>";
+    }).join("") + "</ul>" + '<div class="panel-head" style="border-top:1px solid var(--line)"><h3>Parking lot</h3></div><ul class="list">' + parking.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + "</ul></section></div>";
+    return html;
+  }
+
+  function summaryText() {
+    var su = state.su, lines = ["Stand-up, Thu 12 Nov 2026, 9:00 AM"];
+    var by = { Present: [], Async: [], Absent: [] };
+    su.order.forEach(function (p) { var m = su.marks[p] || "Present"; by[m].push(people[p].name); });
+    lines.push("Present: " + (by.Present.join(", ") || "none"));
+    lines.push("Async: " + (by.Async.join(", ") || "none"));
+    lines.push("Absent: " + (by.Absent.join(", ") || "none"));
+    var open = impediments.filter(function (i) { return i.status === "Open"; });
+    lines.push("Blockers (" + open.length + "):");
+    open.forEach(function (i) { lines.push("- " + i.id + " " + i.title + " (" + i.item + ", owner " + people[i.owner].name + ")"); });
+    lines.push("Moved since yesterday: S-107 to Accepted, S-101 to Completed, T-209 to Done");
+    if (parking.length) lines.push("Parking lot: " + parking.join("; "));
+    return lines.join("\n");
+  }
+
+  function renderTime() {
+    var rows = can("allHours") ? team : (team.indexOf(me()) !== -1 ? [me()] : []);
+    var html = viewHead("Hours · sprint W46", "Every number comes from hours logged on Tasks. Click a cell to see the entries behind it. The marker on each bar is the 8-hour weekly minimum.", readOnlyNote());
+    if (!rows.length) return html + '<div class="card" style="padding:16px">Observers do not see hours.</div>';
+    html += '<div class="card time" style="overflow-x:auto"><table><thead><tr><th>Person</th>' + DAY_LABEL.map(function (d, i) { return '<th class="' + (DAYS[i] === TODAY ? "today" : "") + '">' + d + "</th>"; }).join("") + '<th style="min-width:150px">Total vs 8 h</th></tr></thead><tbody>';
+    rows.forEach(function (p) {
+      var tot = 0;
+      html += "<tr><td><div style=\"display:flex;gap:8px;align-items:center\">" + avatar(p, 22) + esc(people[p].name) + "</div></td>";
+      DAYS.forEach(function (d) {
+        var h = entries.filter(function (x) { return x.person === p && x.date === d; }).reduce(function (a, x) { return a + x.hours; }, 0);
+        tot += h;
+        html += '<td class="cell' + (d === TODAY ? " today" : "") + '">' + (h ? '<button data-act="cell" data-p="' + p + '" data-d="' + d + '">' + fmt(h) + "</button>" : '<span class="muted">-</span>') + "</td>";
+      });
+      html += '<td><div class="tot"><span class="mono">' + fmt(tot) + '</span><div class="bar"><span class="' + (tot < 8 ? "under" : "") + '" style="width:' + Math.min(100, tot / 8 * 100) + '%"></span></div></div></td></tr>';
+    });
+    html += "</tbody></table></div>";
+    if (state.timeCell) {
+      var c = state.timeCell, list = entries.filter(function (x) { return x.person === c.p && x.date === c.d; });
+      html += '<section class="card" style="margin-top:16px"><div class="panel-head"><h3>' + esc(people[c.p].name) + " · " + DAY_LABEL[DAYS.indexOf(c.d)] + ' Nov</h3><button class="btn small" data-act="cell-close">Close</button></div><ul class="list">' + list.map(function (x) { var t = byId(x.task); return '<li><button class="linkish" data-act="open" data-id="' + t.id + '"><span class="mono muted">' + t.id + "</span> " + esc(t.title) + '</button><span class="mono">' + fmt(x.hours) + " h</span></li>"; }).join("") + "</ul></section>";
+    }
+    html += '<p class="muted" style="font-size:12.5px">Self-reported effort, not an approved timesheet. Programme overhead (stand-ups, learning) is logged on each sprint\'s overhead Story.</p>';
+    return html;
+  }
+
+  function renderBugs() {
+    var open = bugs.filter(openBug);
+    var right = '<div class="actions">' + readOnlyNote() + '<button class="btn primary" data-act="new-bug"' + dis("raiseBug") + ">Raise a bug</button></div>";
+    var html = viewHead("Bug dashboard", "Phase 2 view. Every bug belongs to a Feature; an open S1 joins the next stand-up as a blocker.", right);
+    if (state.newBug) {
+      html += '<form class="card update" id="bug-form" style="margin-bottom:16px"><div class="inline-form"><div class="field" style="flex:2;min-width:200px"><label for="nb-title">Title</label><input id="nb-title" required placeholder="What is wrong, in a few words"></div><div class="field"><label for="nb-feature">Feature</label><select id="nb-feature">' + items.filter(function (x) { return x.type === "Feature"; }).map(function (f) { return '<option value="' + f.id + '">' + f.id + " " + esc(f.title) + "</option>"; }).join("") + '</select></div><div class="field"><label for="nb-sev">Severity</label><select id="nb-sev"><option>S1</option><option>S2</option><option selected>S3</option><option>S4</option></select></div><button class="btn primary" type="submit">Save bug</button><button class="btn" type="button" data-act="cancel-bug">Cancel</button></div></form>';
+    }
+    html += '<div class="tiles">' + ["S1", "S2", "S3", "S4"].map(function (s) {
+      var n = open.filter(function (b) { return b.severity === s; }).length;
+      var name = { S1: "Critical", S2: "Major", S3: "Minor", S4: "Trivial" }[s];
+      return '<div class="card tile ' + s + '"><div class="muted" style="font-size:12px">' + s + " " + name + '</div><div class="v">' + n + "</div></div>";
+    }).join("") + "</div>";
+    var feats = items.filter(function (x) { return x.type === "Feature"; });
+    var maxF = Math.max.apply(null, feats.map(function (f) { return bugsOf(f.id).filter(openBug).length; }).concat([1]));
+    var buckets = [["0 to 2 days", 0, 2], ["3 to 7 days", 3, 7], ["8 to 14 days", 8, 14], ["15+ days", 15, 999]];
+    var maxB = Math.max.apply(null, buckets.map(function (b) { return open.filter(function (x) { var d = daysOpen(x); return d >= b[1] && d <= b[2]; }).length; }).concat([1]));
+    html += '<div class="split2" style="margin-top:0"><section class="card"><div class="panel-head"><h3>Open bugs by Feature</h3></div><div class="hbars">' + feats.map(function (f) {
+      var n = bugsOf(f.id).filter(openBug).length;
+      return '<div class="hbar"><span>' + f.id + " " + esc(f.title) + '</span><div class="track"><span style="width:' + (n / maxF * 100) + '%"></span></div><span class="num">' + n + "</span></div>";
+    }).join("") + '</div></section><section class="card"><div class="panel-head"><h3>Ageing of open bugs</h3><span class="muted" style="font-size:12px">as of 12 Nov</span></div><div class="hbars">' + buckets.map(function (b) {
+      var n = open.filter(function (x) { var d = daysOpen(x); return d >= b[1] && d <= b[2]; }).length;
+      return '<div class="hbar"><span>' + b[0] + '</span><div class="track"><span style="width:' + (n / maxB * 100) + '%;background:var(--warn)"></span></div><span class="num">' + n + "</span></div>";
+    }).join("") + "</div></section></div>";
+    html += '<section class="card" style="margin-top:16px;overflow-x:auto"><div class="panel-head"><h3>All bugs</h3><span class="muted" style="font-size:12px">' + open.length + " open of " + bugs.length + '</span></div><div class="tree"><table><thead><tr><th>Bug</th><th>Severity</th><th>Feature</th><th>Status</th><th>Owner</th><th class="num">Days open</th></tr></thead><tbody>' +
+      bugs.slice().sort(function (a, b) { return (openBug(b) - openBug(a)) || a.severity.localeCompare(b.severity); }).map(function (b) {
+        return '<tr><td><span class="mono muted">' + b.id + '</span> <button class="linkish" data-act="open" data-id="' + b.id + '">' + esc(b.title) + '</button></td><td><span class="sev ' + b.severity + '">' + b.severity + "</span></td><td class=\"mono\">" + b.parent + "</td><td>" + statusPill(b.status) + "</td><td>" + avatar(b.owner, 22) + '</td><td class="num">' + (openBug(b) ? daysOpen(b) : "-") + "</td></tr>";
+      }).join("") + "</tbody></table></div></section>";
+    return html;
+  }
+
+  // ---------- drawer ----------
+  function renderDrawer() {
+    var d = $("#drawer"), it = state.drawer ? byId(state.drawer) : null;
+    if (!it) { d.classList.remove("open"); d.setAttribute("aria-hidden", "true"); $("#scrim").classList.remove("open"); d.innerHTML = ""; return; }
+    var f = [];
+    function add(k, v) { if (v !== undefined && v !== null && v !== "") f.push("<dt>" + k + "</dt><dd>" + v + "</dd>"); }
+    var parent = it.parent ? byId(it.parent) : null;
+    add("Status", statusPill(it.status));
+    add("Owner", '<span style="display:inline-flex;gap:6px;align-items:center">' + avatar(it.owner, 20) + esc(people[it.owner].name) + "</span>");
+    if (parent) add("Parent", '<button class="linkish" data-act="open" data-id="' + parent.id + '"><span class="mono">' + parent.id + "</span> " + esc(parent.title) + "</button>");
+    add("Priority", it.priority);
+    if (it.type === "Idea") { add("Problem", esc(it.problem)); add("Votes", it.votes); add("Promoted to", it.promoted); }
+    if (it.type === "Epic") { add("Outcome", esc(it.outcome)); add("Success measure", esc(it.measure)); }
+    if (it.type === "Feature") { add("Benefit hypothesis", esc(it.hypothesis)); add("Acceptance criteria", esc(it.ac)); add("Open bugs", bugsOf(it.id).filter(openBug).length); }
+    if (it.type === "Epic" || it.type === "Feature") { var p = points(it); add("% done (points)", (p ? Math.round(donePoints(it) / p * 100) : 0) + "% of " + p + " pts"); }
+    if (it.type === "Story") { add("Points", it.points); add("Sprint", it.sprint); add("Acceptance criteria", "Given / When / Then, written by the PO"); }
+    if (it.type === "Task") { add("Estimate", fmt(it.est) + " h"); add("Remaining", fmt(Math.max(0, it.est - logged(it))) + " h"); }
+    if (it.type !== "Idea" && it.type !== "Bug") add("Hours logged", '<span class="mono">' + fmt(logged(it)) + " of " + fmt(estimate(it)) + " h</span>" + (it.type !== "Task" ? ' <span class="muted">(sum of Tasks)</span>' : ""));
+    if (it.type === "Bug") { add("Severity", '<span class="sev ' + it.severity + '">' + it.severity + "</span>"); add("Found in", it.foundIn); add("Steps", esc(it.steps)); add("Expected", esc(it.expected)); add("Actual", esc(it.actual)); add("Opened", it.opened); }
+
+    var html = '<div class="drawer-head"><span class="tb ' + it.type + '">' + it.type.toUpperCase() + '</span><div style="flex:1"><div class="mono muted">' + it.id + "</div><h2>" + esc(it.title) + '</h2></div><button class="btn small" data-act="close" aria-label="Close details">Close</button></div><div class="drawer-body">';
+    html += '<dl class="fields">' + f.join("") + "</dl>";
+
+    // status change
+    var flow = it.type === "Task" ? TASK_FLOW : it.type === "Story" ? STORY_FLOW : it.type === "Bug" ? BUG_FLOW : null;
+    if (flow) {
+      var perm = it.type === "Bug" ? "triage" : "stories";
+      html += '<div class="field"><label for="d-status">Change status</label><select id="d-status" data-id="' + it.id + '"' + dis(perm) + ">" + flow.map(function (s) { return "<option" + (s === it.status ? " selected" : "") + ">" + s + "</option>"; }).join("") + "</select></div>";
+    }
+    // children
+    var ch = kids(it.id), bg = it.type === "Feature" ? bugsOf(it.id) : [];
+    if (ch.length || bg.length) {
+      html += '<section><h3 style="margin-bottom:6px">' + (it.type === "Story" ? "Tasks" : "Children") + '</h3><ul class="list card">' + ch.concat(bg).map(function (c) {
+        return '<li><button class="linkish" data-act="open" data-id="' + c.id + '"><span class="tb ' + c.type + '" style="min-width:0">' + c.type[0] + '</span> <span class="mono muted">' + c.id + "</span> " + esc(c.title) + "</button>" + statusPill(c.status) + "</li>";
+      }).join("") + "</ul></section>";
+    }
+    // log hours
+    if (it.type === "Task") {
+      var mine = it.owner === me();
+      var own = entries.filter(function (x) { return x.task === it.id; });
+      html += '<section><h3 style="margin-bottom:6px">Hours on this task</h3>' + (own.length ? '<ul class="list card">' + own.map(function (x) { return "<li><span>" + esc(people[x.person].name) + " · " + DAY_LABEL[DAYS.indexOf(x.date)] + ' Nov</span><span class="mono">' + fmt(x.hours) + " h</span></li>"; }).join("") + "</ul>" : '<p class="muted" style="margin:0">No hours logged yet.</p>') + "</section>";
+      if (mine && can("logHours")) {
+        html += '<form class="inline-form" id="log-form" data-id="' + it.id + '"><div class="field"><label for="lf-day">Day</label><select id="lf-day">' + DAYS.slice(0, 5).map(function (dd, i) { return '<option value="' + dd + '"' + (dd === TODAY ? " selected" : "") + ">" + DAY_LABEL[i] + "</option>"; }).join("") + '</select></div><div class="field"><label for="lf-h">Hours</label><input id="lf-h" type="number" min="0.25" max="8" step="0.25" value="1" style="width:90px"></div><button class="btn primary" type="submit">Log hours</button></form>';
+      } else {
+        html += '<p class="muted" style="margin:0;font-size:12.5px">Only the assignee (' + esc(people[it.owner].name) + ") logs hours on this task.</p>";
+      }
+    }
+    // AI suggestions
+    if (["Idea", "Feature", "Story"].indexOf(it.type) !== -1) {
+      var label = it.type === "Story" ? "Suggest tasks" : "Suggest stories";
+      html += '<section class="ai"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><strong>AI assist</strong><span class="phase">Phase 2 preview</span></div>';
+      if (state.ai && state.ai.id === it.id) {
+        html += "<div>" + esc(state.ai.intro) + "</div><ul>" + state.ai.list.map(function (s) { return "<li>" + esc(s.title) + (s.est ? ' <span class="mono muted">' + s.est + " h</span>" : "") + "</li>"; }).join("") + "</ul>" + (state.ai.warn ? '<div class="readonly-note">' + esc(state.ai.warn) + "</div>" : "") +
+          '<div class="actions"><button class="btn primary small" data-act="ai-accept" data-id="' + it.id + '"' + dis("stories") + '>Accept all</button><button class="btn small" data-act="ai-discard">Discard</button></div><div class="muted" style="font-size:12px">Only the item text was sent. Nothing changes until you accept.</div>';
+      } else {
+        html += '<div class="muted" style="font-size:12.5px">Drafts ' + (it.type === "Story" ? "tasks with hour estimates" : "user stories with acceptance criteria") + ' for a person to accept or discard.</div><div><button class="btn small" data-act="ai-suggest" data-id="' + it.id + '"' + dis("ai") + ">" + label + "</button></div>";
+      }
+      html += "</section>";
+    }
+    html += '<div class="muted" style="font-size:12px">Every change is written to the audit log with who and when.</div></div>';
+    d.innerHTML = html;
+    d.classList.add("open"); d.setAttribute("aria-hidden", "false"); $("#scrim").classList.add("open");
+  }
+
+  function aiSuggest(it) {
+    if (it.type === "Story") {
+      var list = [{ title: "Write Given/When/Then cases for " + it.id, est: 1 }, { title: "Build the UI for this story", est: 3 }, { title: "Test on a 380 px phone and a laptop", est: 1 }];
+      var ownerLoad = items.filter(function (x) { return x.type === "Task" && x.owner === it.owner && x.status !== "Done"; }).reduce(function (a, x) { return a + Math.max(0, x.est - logged(x)); }, 0);
+      return { id: it.id, intro: "Three tasks, 5 hours in total, assigned to " + people[it.owner].name + ":", list: list, warn: ownerLoad + 5 > 8 ? people[it.owner].name + " would have " + fmt(ownerLoad + 5) + " h left this sprint, over the 8-hour week." : "" };
+    }
+    return { id: it.id, intro: "Two stories drafted from \"" + it.title + "\":", list: [{ title: "As an intern I want to see " + it.title.toLowerCase() + " on my phone so that I can act before stand-up" }, { title: "As a Product Owner I want " + it.title.toLowerCase() + " reported per sprint so that I can track progress" }] };
+  }
+
+  // ---------- render loop ----------
+  function render() {
+    var m = $("#main");
+    var v = state.view;
+    m.innerHTML = v === "board" ? renderBoard() : v === "standup" ? renderStandup() : v === "time" ? renderTime() : v === "bugs" ? renderBugs() : renderBacklog();
+    document.querySelectorAll(".rail a[data-view]").forEach(function (a) { if (a.getAttribute("data-view") === v) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+    $("#gh-user").textContent = people[me()].gh;
+    renderDrawer();
+    var s = $("#search");
+    if (s && state._focusSearch) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); state._focusSearch = false; }
+  }
+  function route() {
+    var h = (location.hash || "").replace("#", "");
+    state.view = ["backlog", "board", "standup", "time", "bugs"].indexOf(h) !== -1 ? h : "backlog";
+    render();
+  }
+
+  function tick() {
+    var su = state.su;
+    su.seconds -= 1;
+    var t = document.querySelector(".timer");
+    if (t) { t.textContent = (su.seconds < 0 ? "+" : "") + Math.floor(Math.abs(su.seconds) / 60) + ":" + String(Math.abs(su.seconds) % 60).padStart(2, "0"); t.classList.toggle("over", su.seconds < 0); }
+  }
+  function stopTimer() { if (state.su.timer) { clearInterval(state.su.timer); state.su.timer = null; } }
+
+  // ---------- events ----------
+  document.addEventListener("click", function (ev) {
+    var b = ev.target.closest("[data-act]");
+    if (!b || b.disabled) return;
+    var act = b.getAttribute("data-act"), id = b.getAttribute("data-id");
+    var su = state.su;
+    switch (act) {
+      case "mode": state.backlogMode = b.getAttribute("data-mode"); break;
+      case "toggle": state.expanded[id] = !state.expanded[id]; break;
+      case "expand-all": items.forEach(function (x) { if (x.type !== "Task") state.expanded[x.id] = true; }); break;
+      case "collapse-all": state.expanded = {}; break;
+      case "open": state.drawer = id; state.ai = null; break;
+      case "close": state.drawer = null; state.ai = null; break;
+      case "promote": var idea = byId(id); var eid = "E-" + (items.filter(function (x) { return x.type === "Epic"; }).length + 1); items.push({ id: eid, type: "Epic", title: idea.title, status: "Draft", owner: "maya", priority: idea.priority, outcome: idea.problem, measure: "To be set by the PO" }); idea.status = "Accepted"; idea.promoted = eid; toast(id + " promoted to " + eid); break;
+      case "new-item": toast("Demo: the create form opens here in the real app"); return;
+      case "move":
+        var st = byId(id), i = STORY_FLOW.indexOf(st.status) + Number(b.getAttribute("data-dir"));
+        if (STORY_FLOW[i] === "Accepted" && !can("order")) { toast("Only the PO or Admin can accept a Story"); return; }
+        if (i >= 0 && i < STORY_FLOW.length) { st.status = STORY_FLOW[i]; toast(id + " moved to " + st.status); }
+        break;
+      case "su-start":
+        su.running = true; su.done = false; su.marks = {};
+        var start = 2; su.order = team.slice(start).concat(team.slice(0, start)); su.idx = 0; su.seconds = 90;
+        stopTimer(); su.timer = setInterval(tick, 1000); break;
+      case "su-next":
+        if (!su.marks[su.order[su.idx]]) su.marks[su.order[su.idx]] = updates[su.order[su.idx]] && updates[su.order[su.idx]].async ? "Async" : "Present";
+        if (su.idx < su.order.length - 1) { su.idx += 1; su.seconds = 90; }
+        else { finishStandup(); }
+        break;
+      case "su-end": finishStandup(); break;
+      case "mark": su.marks[su.order[su.idx]] = b.getAttribute("data-mark"); break;
+      case "raise-blocker":
+        var who = su.order[su.idx], u = updates[who];
+        var imp = { id: "IMP-" + state.nextImp++, title: (u && u.b) ? u.b : "Blocker raised by " + people[who].name, item: (items.find(function (x) { return x.type === "Task" && x.owner === who && x.status === "In progress"; }) || { parent: "S-108" }).parent, owner: "arnab", raised: TODAY, status: "Open" };
+        impediments.unshift(imp); toast(imp.id + " raised"); break;
+      case "park": parking.push("Follow-up with " + people[su.order[su.idx]].name); toast("Topic parked for after stand-up"); break;
+      case "resolve": impediments.forEach(function (x) { if (x.id === id) x.status = "Resolved"; }); toast(id + " resolved"); break;
+      case "copy-summary":
+        try { navigator.clipboard.writeText(summaryText()).then(function () { toast("Summary copied"); }, function () { toast("Copy blocked; select the text instead"); }); } catch (e2) { toast("Copy blocked; select the text instead"); }
+        return;
+      case "cell": state.timeCell = { p: b.getAttribute("data-p"), d: b.getAttribute("data-d") }; break;
+      case "cell-close": state.timeCell = null; break;
+      case "new-bug": state.newBug = true; break;
+      case "cancel-bug": state.newBug = false; break;
+      case "ai-suggest": state.ai = aiSuggest(byId(id)); break;
+      case "ai-discard": state.ai = null; break;
+      case "ai-accept":
+        var it = byId(id);
+        state.ai.list.forEach(function (s, k) {
+          if (it.type === "Story") items.push({ id: "T-" + (400 + items.length + k), type: "Task", parent: it.id, title: s.title, status: "To do", owner: it.owner, est: s.est });
+          else if (it.type === "Feature") items.push({ id: "S-" + (200 + items.length + k), type: "Story", parent: it.id, title: s.title, status: "Defined", owner: it.owner, points: 3, priority: "P2", sprint: "" });
+        });
+        if (it.type === "Idea") toast("Promote the Idea to an Epic first; stories attach to a Feature");
+        else toast(state.ai.list.length + " items added, marked AI-assisted");
+        state.ai = null; break;
+    }
+    render();
+  });
+  function finishStandup() {
+    var su = state.su;
+    su.order.forEach(function (p) { if (!su.marks[p]) su.marks[p] = updates[p] ? (updates[p].async ? "Async" : "Present") : "Absent"; if (su.marks[p] === "Present") attendance[p] += 1; });
+    su.running = false; su.done = true; stopTimer();
+    toast("Stand-up summary saved");
+  }
+  document.addEventListener("change", function (ev) {
+    if (ev.target.id === "d-status") {
+      var it = byId(ev.target.getAttribute("data-id"));
+      if (it.type === "Story" && ev.target.value === "Accepted" && !can("order")) { toast("Only the PO or Admin can accept a Story"); render(); return; }
+      if (it.type === "Bug" && it.status === "New" && !it.severity) { toast("Set a severity first"); return; }
+      it.status = ev.target.value; toast(it.id + " is now " + it.status); render();
+    }
+    if (ev.target.id === "role") { state.role = ev.target.value; state.ai = null; state.newBug = false; render(); toast("Viewing as " + ROLES[state.role].label + ", " + people[me()].name); }
+  });
+  document.addEventListener("input", function (ev) {
+    if (ev.target.id === "search") { state.search = ev.target.value; state._focusSearch = true; render(); }
+  });
+  document.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    if (ev.target.id === "update-form") {
+      updates[me()] = { y: $("#u-y").value.trim(), t: $("#u-t").value.trim(), b: $("#u-b").value.trim() };
+      if (updates[me()].b) { impediments.unshift({ id: "IMP-" + state.nextImp++, title: updates[me()].b, item: "S-108", owner: me(), raised: TODAY, status: "Open" }); }
+      toast("Update posted"); render();
+    }
+    if (ev.target.id === "log-form") {
+      var h = parseFloat($("#lf-h").value);
+      if (!(h > 0 && h <= 8)) { toast("Enter between 0.25 and 8 hours"); return; }
+      entries.push({ person: me(), task: ev.target.getAttribute("data-id"), date: $("#lf-day").value, hours: h });
+      toast(fmt(h) + " h logged; Story and Epic totals updated"); render();
+    }
+    if (ev.target.id === "bug-form") {
+      var title = $("#nb-title").value.trim();
+      if (!title) return;
+      var sev = $("#nb-sev").value;
+      var nb = { id: "B-" + state.nextBug++, type: "Bug", parent: $("#nb-feature").value, title: title, severity: sev, status: "New", owner: me() === "serge" || me() === "ana" ? "arnab" : me(), opened: TODAY, steps: "", expected: "", actual: "" };
+      bugs.unshift(nb);
+      if (sev === "S1") impediments.unshift({ id: "IMP-" + state.nextImp++, title: nb.id + " " + title, item: nb.parent, owner: nb.owner, raised: TODAY, status: "Open" });
+      state.newBug = false; toast(nb.id + " raised" + (sev === "S1" ? "; added to stand-up blockers" : "")); render();
+    }
+  });
+  $("#scrim").addEventListener("click", function () { state.drawer = null; state.ai = null; render(); });
+  document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && state.drawer) { state.drawer = null; render(); } });
+  window.addEventListener("hashchange", route);
+  route();
+})();
+</script>
+</body>
+</html>
